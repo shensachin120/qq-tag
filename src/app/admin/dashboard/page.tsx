@@ -150,126 +150,126 @@ export default function AdminDashboardPage() {
   const getPixelSizeForPrintSize = (size: QrCodePrintSize): number => {
     switch (size) {
       case "small": return 100;
-      case "medium": return 200;
-      case "large": return 300;
-      case "x-large": return 400;
-      case "xx-large": return 500;
-      default: return 200;
+      case "medium": return 150; // Adjusted for better fit with padding
+      case "large": return 200;
+      case "x-large": return 250;
+      case "xx-large": return 300;
+      default: return 150;
     }
   };
 
   const confirmPrint = async () => {
     const qrDomain = APP_DOMAIN || 'https://stickerfind.example.com'; 
     const pixelSize = getPixelSizeForPrintSize(printSize);
+    let qrsToPrint: QrCode[] = [];
+    let pageTitle = "Print QR Codes";
 
     if (selectedQrForPrint) {
-      const qrUrl = `${qrDomain}/q/${selectedQrForPrint.uniqueId}`;
-      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${pixelSize}x${pixelSize}&data=${encodeURIComponent(qrUrl)}`;
-      
-      try {
-        const response = await fetch(qrImageUrl);
-        if (!response.ok) throw new Error('Failed to fetch QR image');
-        const blob = await response.blob();
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = `QR_${selectedQrForPrint.uniqueId}_${printSize}.png`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(downloadUrl);
+      qrsToPrint = [selectedQrForPrint];
+      pageTitle = `Print QR Code: ${selectedQrForPrint.uniqueId}`;
+    } else if (selectedBatchForPrint) {
+      qrsToPrint = allQrs.filter(qr => qr.batchId === selectedBatchForPrint.id && qr.status !== 'deleted');
+      pageTitle = `Print Batch: ${selectedBatchForPrint.name}`;
+    }
+
+    if (qrsToPrint.length > 0) {
+      let printHtml = `
+        <html>
+          <head>
+            <title>${pageTitle} - Size: ${printSize}</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; background-color: #fff; }
+              .qr-print-item { 
+                page-break-inside: avoid; 
+                display: inline-flex; 
+                flex-direction: column;
+                align-items: center;
+                margin: 15px; 
+                text-align: center; 
+              }
+              .sticker-body {
+                background-color: #000000; /* Black background */
+                color: #FFFFFF; /* White text */
+                padding: 20px; /* Padding around QR and text */
+                border-radius: 12px; /* Rounded corners */
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                width: ${pixelSize + 40}px; /* Adjust width based on QR size + padding */
+                box-sizing: border-box;
+              }
+              .sticker-body img { 
+                display: block; 
+                margin-bottom: 10px; /* Space between QR and text */
+                border-radius: 6px; /* Slightly round corners of the QR image itself if needed */
+              }
+              .sticker-text { 
+                font-size: ${pixelSize < 150 ? '12px' : '16px'}; /* Dynamic font size */
+                font-weight: bold; 
+                text-align: center;
+              }
+              .sticker-id-caption {
+                font-size: 10px;
+                color: #333333;
+                margin-top: 8px;
+              }
+              @media print {
+                body { margin: 0; }
+                .qr-print-item { margin: 10mm 5mm; }
+                h1.print-header, p.print-header-info, hr.print-header-separator { display: none !important; }
+              }
+            </style>
+          </head>
+          <body>
+            <h1 class="print-header">${pageTitle}</h1>
+            <p class="print-header-info">Found ${qrsToPrint.length} QR Codes to print (Size: ${printSize}).</p>
+            <hr class="print-header-separator"/>
+      `;
+
+      qrsToPrint.forEach(qr => {
+        const qrUrl = `${qrDomain}/q/${qr.uniqueId}`;
+        // Request white QR on black background from api.qrserver.com
+        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${pixelSize}x${pixelSize}&data=${encodeURIComponent(qrUrl)}&color=FFFFFF&bgcolor=000000&qzone=1&format=png&margin=0`;
         
+        printHtml += `
+          <div class="qr-print-item">
+            <div class="sticker-body">
+              <img src="${qrImageUrl}" alt="QR Code for ${qr.uniqueId}" width="${pixelSize}" height="${pixelSize}" />
+              <div class="sticker-text">Scan to Return</div>
+            </div>
+            <div class="sticker-id-caption">${qr.uniqueId}</div>
+          </div>
+        `;
+      });
+
+      printHtml += `
+          </body>
+        </html>
+      `;
+
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.open();
+        printWindow.document.write(printHtml);
+        printWindow.document.close();
         toast({ 
-          title: "QR Code Downloaded", 
-          description: `QR Code ${selectedQrForPrint.uniqueId} (${printSize}) has been prepared for download.` 
+          title: "Print Page Ready", 
+          description: `A new tab has opened with ${qrsToPrint.length} QR Code(s). You can print this page (e.g., via Ctrl+P or Cmd+P).` 
         });
-      } catch (error) {
-        console.error("Error downloading QR code:", error);
-        toast({
-          title: "Download Failed",
-          description: "Could not download the QR code image.",
+      } else {
+         toast({
+          title: "Pop-up Blocked",
+          description: "Could not open the print page. Please disable your pop-up blocker for this site and try again.",
           variant: "destructive",
         });
       }
-
-    } else if (selectedBatchForPrint) {
-      const qrsInBatch = allQrs.filter(qr => qr.batchId === selectedBatchForPrint.id && qr.status !== 'deleted');
-
-      if (qrsInBatch.length > 0) {
-        let printHtml = `
-          <html>
-            <head>
-              <title>Print Batch: ${selectedBatchForPrint.name} - Size: ${printSize}</title>
-              <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .qr-item { 
-                  page-break-inside: avoid; 
-                  display: inline-flex; 
-                  flex-direction: column;
-                  align-items: center;
-                  margin: 15px; 
-                  text-align: center; 
-                  border: 1px solid #eee; 
-                  padding: 15px;
-                  border-radius: 8px;
-                  background-color: #f9f9f9;
-                }
-                .qr-item img { display: block; margin-bottom: 8px; }
-                .qr-item .qr-id { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 4px; }
-                .qr-item .scan-text { font-size: 12px; color: #555; }
-                @media print {
-                  body { margin: 0; }
-                  .qr-item { border: 1px dashed #ccc; margin: 10mm 5mm; padding: 5mm; background-color: transparent; }
-                  h1, p:first-of-type, hr { display: none; } /* Hide header elements for cleaner print */
-                }
-              </style>
-            </head>
-            <body>
-              <h1>Batch: ${selectedBatchForPrint.name} (Size: ${printSize})</h1>
-              <p>Found ${qrsInBatch.length} QR Codes to print for this batch.</p>
-              <hr/>
-        `;
-
-        qrsInBatch.forEach(qr => {
-          const qrUrl = `${qrDomain}/q/${qr.uniqueId}`;
-          const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${pixelSize}x${pixelSize}&data=${encodeURIComponent(qrUrl)}`;
-          printHtml += `
-            <div class="qr-item">
-              <img src="${qrImageUrl}" alt="QR Code for ${qr.uniqueId}" width="${pixelSize}" height="${pixelSize}" />
-              <div class="qr-id">${qr.uniqueId}</div>
-              <div class="scan-text">Scan to Return</div>
-            </div>
-          `;
-        });
-
-        printHtml += `
-            </body>
-          </html>
-        `;
-
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.open();
-          printWindow.document.write(printHtml);
-          printWindow.document.close();
-          toast({ 
-            title: "Batch Print Page Ready", 
-            description: `A new tab has opened with ${qrsInBatch.length} QR Codes for batch ${selectedBatchForPrint.name}. You can print this page (e.g., via Ctrl+P or Cmd+P).` 
-          });
-        } else {
-           toast({
-            title: "Pop-up Blocked",
-            description: "Could not open the print page for the batch. Please disable your pop-up blocker for this site and try again.",
-            variant: "destructive",
-          });
-        }
-      } else {
-         toast({ 
-          title: "Batch Print Notice", 
-          description: `No active (non-deleted) QR codes found in batch ${selectedBatchForPrint.name} to print.`,
-        });
-      }
+    } else {
+       toast({ 
+        title: "Print Notice", 
+        description: `No active (non-deleted) QR codes found to print.`,
+      });
     }
+    
     setSelectedQrForPrint(null);
     setSelectedBatchForPrint(null);
   };
@@ -293,7 +293,7 @@ export default function AdminDashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle>All QR Codes</CardTitle>
-              <CardDescription>View, search, and download individual QR codes.</CardDescription>
+              <CardDescription>View, search, and prepare individual QR codes for printing.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="mb-4">
@@ -334,7 +334,7 @@ export default function AdminDashboardPage() {
                       <TableCell>{new Date(qr.createdAt).toLocaleDateString()}</TableCell>
                       <TableCell>
                         <Button variant="outline" size="sm" onClick={() => handlePrintQr(qr)}>
-                          <Printer className="mr-1 h-4 w-4" /> Download
+                          <Printer className="mr-1 h-4 w-4" /> Print
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -423,8 +423,8 @@ export default function AdminDashboardPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Print Settings</AlertDialogTitle>
             <AlertDialogDescription>
-              You are about to prepare {selectedQrForPrint ? `QR Code ${selectedQrForPrint.uniqueId} for download` : selectedBatchForPrint ? `Batch ${selectedBatchForPrint.name} for printing` : "items"}. 
-              Please select a print size.
+              You are about to prepare {selectedQrForPrint ? `QR Code ${selectedQrForPrint.uniqueId}` : selectedBatchForPrint ? `Batch ${selectedBatchForPrint.name}` : "items"} for printing. 
+              Please select a print size. The items will open in a new tab for printing.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-4">
@@ -446,7 +446,7 @@ export default function AdminDashboardPage() {
             <AlertDialogCancel onClick={() => { setSelectedQrForPrint(null); setSelectedBatchForPrint(null); }}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmPrint} style={{backgroundColor: 'hsl(var(--accent))', color: 'hsl(var(--accent-foreground))'}}>
               <Printer className="mr-2 h-4 w-4" /> 
-              {selectedQrForPrint ? "Download QR" : "Open Batch for Print"}
+              Open for Print
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
