@@ -113,6 +113,8 @@ body {
     flex-direction: column;
   }
   input, textarea, select {
-    @apply border-input-border;
+    border-width: 1px;
+    border-style: solid;
+    border-color: hsl(var(--input-border));
   }
 }
