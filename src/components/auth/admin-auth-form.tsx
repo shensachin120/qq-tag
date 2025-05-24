@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { Key, UserShield, LogIn as LoginIcon } from "lucide-react";
+import { Key, UserCog, LogIn as LoginIcon } from "lucide-react"; // Changed UserShield to UserCog
 import { ADMIN_USERNAME, ADMIN_PASSWORD } from "@/lib/constants";
 
 const adminLoginSchema = z.object({
@@ -57,7 +58,7 @@ export function AdminAuthForm() {
                 <FormLabel>Username</FormLabel>
                 <FormControl>
                   <div className="relative">
-                    <UserShield className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <UserCog className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input placeholder="admin_user" {...field} className="pl-10" />
                   </div>
                 </FormControl>
@@ -90,3 +91,4 @@ export function AdminAuthForm() {
     </div>
   );
 }
+
