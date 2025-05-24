@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -8,10 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { QrCode as QrCodeIcon, Search, Printer, PlusCircle, ListFilter, Download } from "lucide-react";
+import { QrCode as QrCodeIcon, Search, Printer, PlusCircle, ListFilter } from "lucide-react";
 import type { QrCode, QrBatch, QrCodePrintSize } from "@/types";
 import { mockQrCodes, mockQrBatches } from "@/types"; // Using mock data
 import { useToast } from "@/hooks/use-toast";
+import { APP_DOMAIN } from "@/lib/constants";
 import {
   Select,
   SelectContent,
@@ -28,8 +30,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
 
 
 // Mock functions
@@ -121,36 +122,78 @@ export default function AdminDashboardPage() {
       return;
     }
     try {
+      setIsLoading(true);
       const newBatch = await generateBatch(batchSize);
-      setBatches(prev => [...prev, newBatch]);
-      // Refetch QRs to include new ones
-      const updatedQrs = await fetchAllQrCodes();
+      const updatedBatches = await fetchAllBatches(); // Refetch batches
+      setBatches(updatedBatches);
+      
+      const updatedQrs = await fetchAllQrCodes(); // Refetch QRs to include new ones
       setAllQrs(updatedQrs);
-      setFilteredQrs(updatedQrs); // reset filter with new QRs
+      // setFilteredQrs(updatedQrs); // reset filter with new QRs - Handled by useEffect on allQrs
       toast({ title: "Batch Generated", description: `${newBatch.count} QR codes (ID: ${newBatch.startId} to ${newBatch.endId}) created in batch ${newBatch.name}.` });
     } catch (error) {
       toast({ title: "Batch Generation Failed", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
     }
   };
   
   const handlePrintQr = (qr: QrCode) => {
     setSelectedQrForPrint(qr);
-    // In a real app, this would open a print dialog or generate PDF.
-    // For mock, we use an AlertDialog to confirm print action.
+    setSelectedBatchForPrint(null); 
   };
 
   const handlePrintBatch = (batch: QrBatch) => {
      setSelectedBatchForPrint(batch);
+     setSelectedQrForPrint(null);
   };
   
+  const getPixelSizeForPrintSize = (size: QrCodePrintSize): number => {
+    switch (size) {
+      case "small": return 100;
+      case "medium": return 200;
+      case "large": return 300;
+      case "x-large": return 400;
+      case "xx-large": return 500;
+      default: return 200;
+    }
+  };
+
   const confirmPrint = () => {
-    const itemToPrint = selectedQrForPrint ? `QR Code ${selectedQrForPrint.uniqueId}` : selectedBatchForPrint ? `Batch ${selectedBatchForPrint.name}` : "items";
-    toast({ title: "Print Initiated (Mock)", description: `Preparing ${itemToPrint} for printing in ${printSize} size. A PDF would download.` });
+    const qrDomain = APP_DOMAIN || 'https://stickerfind.example.com'; // Fallback
+    const pixelSize = getPixelSizeForPrintSize(printSize);
+
+    if (selectedQrForPrint) {
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${pixelSize}x${pixelSize}&data=${encodeURIComponent(`${qrDomain}/q/${selectedQrForPrint.uniqueId}`)}`;
+      window.open(qrImageUrl, '_blank');
+      toast({ 
+        title: "QR Print Initiated", 
+        description: `Opening QR Code ${selectedQrForPrint.uniqueId} (${printSize}) in a new tab. You can save or print it from there.` 
+      });
+    } else if (selectedBatchForPrint) {
+      const qrsInBatch = allQrs.filter(qr => qr.batchId === selectedBatchForPrint.id && qr.status !== 'deleted');
+
+      if (qrsInBatch.length > 0) {
+        qrsInBatch.forEach(qr => {
+          const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${pixelSize}x${pixelSize}&data=${encodeURIComponent(`${qrDomain}/q/${qr.uniqueId}`)}`;
+          window.open(qrImageUrl, '_blank');
+        });
+        toast({ 
+          title: "Batch Print Initiated", 
+          description: `Opening ${qrsInBatch.length} QR Codes from batch ${selectedBatchForPrint.name} (${printSize}) in new tabs. You can save or print them individually.` 
+        });
+      } else {
+         toast({ 
+          title: "Batch Print Notice", 
+          description: `No active QR codes found in batch ${selectedBatchForPrint.name} to print.`,
+        });
+      }
+    }
     setSelectedQrForPrint(null);
     setSelectedBatchForPrint(null);
-  }
+  };
 
-  if (isLoading) {
+  if (isLoading && !allQrs.length && !batches.length) { // Show initial loading better
     return <div className="text-center py-10">Loading admin dashboard...</div>;
   }
 
@@ -244,8 +287,8 @@ export default function AdminDashboardPage() {
                   className="w-full"
                 />
               </div>
-              <Button onClick={handleGenerateBatch} className="w-full" style={{backgroundColor: 'hsl(var(--accent))', color: 'hsl(var(--accent-foreground))'}}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Generate Batch
+              <Button onClick={handleGenerateBatch} className="w-full" style={{backgroundColor: 'hsl(var(--accent))', color: 'hsl(var(--accent-foreground))'}} disabled={isLoading}>
+                {isLoading ? 'Generating...' : <><PlusCircle className="mr-2 h-4 w-4" /> Generate Batch</>}
               </Button>
             </CardContent>
           </Card>
@@ -295,13 +338,13 @@ export default function AdminDashboardPage() {
       </Tabs>
 
       {/* Print Dialog Modal */}
-      <AlertDialog open={!!selectedQrForPrint || !!selectedBatchForPrint} onOpenChange={() => { setSelectedQrForPrint(null); setSelectedBatchForPrint(null); }}>
+      <AlertDialog open={!!selectedQrForPrint || !!selectedBatchForPrint} onOpenChange={(isOpen) => { if (!isOpen) { setSelectedQrForPrint(null); setSelectedBatchForPrint(null); }}}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Print Settings</AlertDialogTitle>
             <AlertDialogDescription>
-              You are about to print {selectedQrForPrint ? `QR Code ${selectedQrForPrint.uniqueId}` : selectedBatchForPrint ? `Batch ${selectedBatchForPrint.name}` : "items"}. 
-              Please select a print size. This is a mock action; a PDF would be generated.
+              You are about to prepare {selectedQrForPrint ? `QR Code ${selectedQrForPrint.uniqueId}` : selectedBatchForPrint ? `Batch ${selectedBatchForPrint.name}` : "items"} for printing. 
+              Please select a print size. QR code images will be opened in new tabs.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-4">
@@ -322,7 +365,7 @@ export default function AdminDashboardPage() {
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => { setSelectedQrForPrint(null); setSelectedBatchForPrint(null); }}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmPrint} style={{backgroundColor: 'hsl(var(--accent))', color: 'hsl(var(--accent-foreground))'}}>
-              <Download className="mr-2 h-4 w-4" /> Download PDF (Mock)
+              <Printer className="mr-2 h-4 w-4" /> Open for Printing
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -331,3 +374,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
