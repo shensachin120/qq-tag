@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,13 +15,14 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Mail, Key, User, LogIn as LoginIcon } from "lucide-react";
 import Link from "next/link";
+import { ADMIN_USERNAME, ADMIN_PASSWORD } from "@/lib/constants";
 
 const signInSchema = z.object({
-  email: z.string().email({ message: "Invalid email address." }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters." }),
+  email: z.string().min(1, { message: "Username or Email is required." }), // Allow username for admin
+  password: z.string().min(1, { message: "Password is required." }),
 });
 
 const signUpSchema = z.object({
@@ -40,6 +42,9 @@ type UserAuthFormProps = {
 export function UserAuthForm({ mode }: UserAuthFormProps) {
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get('redirect') || "/dashboard";
+
   const schema = mode === "signin" ? signInSchema : signUpSchema;
 
   const form = useForm<z.infer<typeof schema>>({
@@ -52,19 +57,30 @@ export function UserAuthForm({ mode }: UserAuthFormProps) {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     if (mode === "signin") {
-      // Mock successful sign-in
+      // Check for admin credentials first
+      if (values.email === ADMIN_USERNAME && values.password === ADMIN_PASSWORD) {
+        localStorage.setItem('isAdminLoggedIn', 'true');
+        localStorage.removeItem('isUserLoggedIn'); // Ensure user is not also marked as logged in
+        toast({ title: "Admin Login Successful", description: "Welcome, Admin!" });
+        router.push("/admin/dashboard");
+        return;
+      }
+
+      // Mock successful user sign-in
       if (values.email === "user@example.com" && values.password === "password") {
         localStorage.setItem('isUserLoggedIn', 'true');
+        localStorage.removeItem('isAdminLoggedIn'); // Ensure admin is not also marked as logged in
         toast({ title: "Sign In Successful", description: "Welcome back!" });
-        router.push("/dashboard");
+        router.push(redirectUrl);
       } else {
-        toast({ title: "Sign In Failed", description: "Invalid email or password.", variant: "destructive" });
+        toast({ title: "Sign In Failed", description: "Invalid credentials.", variant: "destructive" });
       }
-    } else {
+    } else { // Signup mode
       // Mock successful sign-up
-      localStorage.setItem('isUserLoggedIn', 'true'); // Auto-login after signup
+      localStorage.setItem('isUserLoggedIn', 'true');
+      localStorage.removeItem('isAdminLoggedIn'); 
       toast({ title: "Sign Up Successful", description: "Welcome to StickerFind!" });
-      router.push("/dashboard");
+      router.push(redirectUrl.startsWith("/q/") ? redirectUrl : "/dashboard"); // If redirecting to a QR page, go there, else dashboard
     }
   }
   
@@ -73,8 +89,9 @@ export function UserAuthForm({ mode }: UserAuthFormProps) {
     // Mock Google sign-in
     await new Promise(resolve => setTimeout(resolve, 1500));
     localStorage.setItem('isUserLoggedIn', 'true');
+    localStorage.removeItem('isAdminLoggedIn');
     toast({ title: "Google Sign In Successful", description: "Welcome!" });
-    router.push("/dashboard");
+    router.push(redirectUrl.startsWith("/q/") ? redirectUrl : "/dashboard");
   }
 
   return (
@@ -104,11 +121,16 @@ export function UserAuthForm({ mode }: UserAuthFormProps) {
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Email</FormLabel>
+                <FormLabel>{mode === "signin" ? "Username / Email" : "Email"}</FormLabel>
                 <FormControl>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input type="email" placeholder="you@example.com" {...field} className="pl-10" />
+                    <Input 
+                      type={mode === "signup" || field.value.includes('@') ? "email" : "text"} 
+                      placeholder={mode === "signin" ? "admin_user / you@example.com" : "you@example.com"} 
+                      {...field} 
+                      className="pl-10" 
+                    />
                   </div>
                 </FormControl>
                 <FormMessage />
@@ -166,7 +188,6 @@ export function UserAuthForm({ mode }: UserAuthFormProps) {
         </div>
       </div>
       <Button variant="outline" className="w-full" onClick={handleGoogleSignIn}>
-        {/* Placeholder for Google Icon. In real app, use an SVG or library */}
         <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25C22.56 11.47 22.49 10.72 22.36 10H12V14.26H17.99C17.74 15.61 17.02 16.76 15.92 17.49V20.04H19.52C21.45 18.27 22.56 15.52 22.56 12.25Z" fill="#4285F4"></path><path d="M12 23C14.97 23 17.45 22.04 19.52 20.04L15.92 17.49C14.99 18.13 13.62 18.54 12 18.54C9.05 18.54 6.56 16.62 5.53 13.99H1.88V16.61C3.84 20.44 7.64 23 12 23Z" fill="#34A853"></path><path d="M5.53 13.99C5.3 13.32 5.16 12.63 5.16 11.93C5.16 11.23 5.3 10.54 5.53 9.87V7.25H1.88C0.980001 9.05 0.440001 10.92 0.440001 12.88C0.440001 14.84 0.980001 16.71 1.88 18.47L5.53 13.99Z" fill="#FBBC05"></path><path d="M12 5.45C13.44 5.45 14.74 5.95 15.79 6.95L19.58 3.2C17.45 1.21 14.97 0 12 0C7.64 0 3.84 2.56 1.88 7.25L5.53 9.87C6.56 7.24 9.05 5.45 12 5.45Z" fill="#EA4335"></path></svg>
         Sign in with Google
       </Button>
@@ -188,3 +209,5 @@ export function UserAuthForm({ mode }: UserAuthFormProps) {
     </div>
   );
 }
+
+    

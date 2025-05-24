@@ -91,7 +91,7 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     const checkAuth = () => {
       if (localStorage.getItem('isAdminLoggedIn') !== 'true') {
-        router.push('/admin/login');
+        router.push('/auth/signin?redirect=/admin/dashboard'); // Redirect to user signin
       }
     };
     checkAuth();
@@ -150,7 +150,7 @@ export default function AdminDashboardPage() {
   const getPixelSizeForPrintSize = (size: QrCodePrintSize): number => {
     switch (size) {
       case "small": return 100;
-      case "medium": return 150; // Adjusted for better fit with padding
+      case "medium": return 150; 
       case "large": return 200;
       case "x-large": return 250;
       case "xx-large": return 300;
@@ -178,7 +178,7 @@ export default function AdminDashboardPage() {
           <head>
             <title>${pageTitle} - Size: ${printSize}</title>
             <style>
-              body { font-family: Arial, sans-serif; margin: 20px; background-color: #fff; }
+              body { font-family: Arial, sans-serif; margin: 20px; background-color: #fff; display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: flex-start; }
               .qr-print-item { 
                 page-break-inside: avoid; 
                 display: inline-flex; 
@@ -197,6 +197,7 @@ export default function AdminDashboardPage() {
                 align-items: center;
                 width: ${pixelSize + 40}px; /* Adjust width based on QR size + padding */
                 box-sizing: border-box;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
               }
               .sticker-body img { 
                 display: block; 
@@ -214,21 +215,20 @@ export default function AdminDashboardPage() {
                 margin-top: 8px;
               }
               @media print {
-                body { margin: 0; }
+                body { margin: 0; justify-content: space-around; }
                 .qr-print-item { margin: 10mm 5mm; }
                 h1.print-header, p.print-header-info, hr.print-header-separator { display: none !important; }
               }
             </style>
           </head>
           <body>
-            <h1 class="print-header">${pageTitle}</h1>
-            <p class="print-header-info">Found ${qrsToPrint.length} QR Codes to print (Size: ${printSize}).</p>
-            <hr class="print-header-separator"/>
+            <h1 class="print-header" style="width:100%; text-align:center;">${pageTitle}</h1>
+            <p class="print-header-info" style="width:100%; text-align:center;">Found ${qrsToPrint.length} QR Codes to print (Size: ${printSize}).</p>
+            <hr class="print-header-separator" style="width:100%;"/>
       `;
 
       qrsToPrint.forEach(qr => {
         const qrUrl = `${qrDomain}/q/${qr.uniqueId}`;
-        // Request white QR on black background from api.qrserver.com
         const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${pixelSize}x${pixelSize}&data=${encodeURIComponent(qrUrl)}&color=FFFFFF&bgcolor=000000&qzone=1&format=png&margin=0`;
         
         printHtml += `
@@ -455,3 +455,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    

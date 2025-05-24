@@ -1,10 +1,11 @@
+
 // For now, we'll use simple state for auth status. Replace with actual auth logic.
 "use client"; 
 
 import Link from 'next/link';
 import { QrCode, LogIn, LogOut, UserCircle2, ShieldCheck, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 // Mock auth state. In a real app, this would come from a context or server session.
@@ -12,6 +13,7 @@ const useMockAuth = () => {
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     setIsUserLoggedIn(localStorage.getItem('isUserLoggedIn') === 'true');
@@ -21,13 +23,13 @@ const useMockAuth = () => {
   const logoutUser = () => {
     localStorage.removeItem('isUserLoggedIn');
     setIsUserLoggedIn(false);
-    // Redirect or update UI
+    router.push('/'); 
   };
 
   const logoutAdmin = () => {
     localStorage.removeItem('isAdminLoggedIn');
     setIsAdminLoggedIn(false);
-    // Redirect or update UI
+    router.push('/');
   };
 
   return { isUserLoggedIn, isAdminLoggedIn, logoutUser, logoutAdmin };
@@ -41,8 +43,7 @@ export default function Navbar() {
   const handleLogout = () => {
     if (isUserLoggedIn) logoutUser();
     if (isAdminLoggedIn) logoutAdmin();
-    // Potentially redirect to home after logout
-    // For now, Next/link in buttons will handle navigation on click before logout logic from button runs
+    // Navigation is handled within logoutUser/logoutAdmin
   };
   
   return (
@@ -66,10 +67,8 @@ export default function Navbar() {
                     <LayoutDashboard size={18} className="mr-2" /> Dashboard
                   </Link>
                 </Button>
-                <Button variant="ghost" onClick={handleLogout} asChild className="text-primary-foreground hover:bg-primary/80">
-                  <Link href="/">
+                <Button variant="ghost" onClick={handleLogout} className="text-primary-foreground hover:bg-primary/80">
                      <LogOut size={18} className="mr-2" /> Logout
-                  </Link>
                 </Button>
               </>
             ) : isAdminLoggedIn ? (
@@ -79,15 +78,13 @@ export default function Navbar() {
                     <ShieldCheck size={18} className="mr-2" /> Admin Panel
                   </Link>
                 </Button>
-                 <Button variant="ghost" onClick={handleLogout} asChild className="text-primary-foreground hover:bg-primary/80">
-                   <Link href="/">
+                 <Button variant="ghost" onClick={handleLogout} className="text-primary-foreground hover:bg-primary/80">
                      <LogOut size={18} className="mr-2" /> Logout
-                   </Link>
-                </Button>
+                 </Button>
               </>
             ) : (
               <>
-                {pathname !== '/admin/login' && (
+                {pathname !== '/auth/signin' && pathname !== '/auth/signup' && (
                   <Button variant="ghost" asChild className="text-primary-foreground hover:bg-primary/80">
                     <Link href="/auth/signin">
                       <LogIn size={18} className="mr-2" /> Login
@@ -101,11 +98,6 @@ export default function Navbar() {
                      </Link>
                    </Button>
                 )}
-                 {pathname !== '/admin/login' && (
-                    <Button variant="link" asChild className="text-sm text-primary-foreground/70 hover:text-primary-foreground">
-                      <Link href="/admin/login">Admin Login</Link>
-                    </Button>
-                  )}
               </>
             )}
           </div>
@@ -114,3 +106,5 @@ export default function Navbar() {
     </nav>
   );
 }
+
+    
